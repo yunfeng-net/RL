@@ -30,7 +30,7 @@ DX = [-1, 1, 0, 0]
 DY = [0, 0, -1, 1]
 
 
-class Env(object):
+class MazeEnv(gym.Env):
     def __init__(self, mm):
         m = mm.strip().split('\n')
         m = [[c for c in line] for line in m]
@@ -72,16 +72,16 @@ class Env(object):
             self.state = [new_x, new_y]
             self.map[new_x][new_y] = ' '  # update map
             reward = -5
-        return np.array(self.state), reward, self.is_end, {}
+        return np.array(self.state), reward, is_end, {}
 
     def render(self):
         printed_map = copy.deepcopy(self.map)
         printed_map[self.state[0]+1][self.state[1]+1] = 'A'
         print('\n'.join([''.join([c for c in line]) for line in printed_map]))
-        time.sleep(2)
+        time.sleep(0.1)
 
 def make_maze(name):
     if name=="space":
-        return Env(MAP)
+        return MazeEnv(MAP)
     else:
-        return Env(MAP2)
+        return MazeEnv(MAP2)
