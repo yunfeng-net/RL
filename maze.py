@@ -38,25 +38,28 @@ class MazeEnv(gym.Env):
         self.action_space = spaces.Discrete(4)
         self.observation_space = spaces.MultiDiscrete([len(self.map)-2, len(self.map[0])-2])
         self.seed()
-        self.state_num = len(self.map)-2
+        self.state_num = (len(self.map)-2)*(len(self.map[0])-2)
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+    def state_id(self, state):
+        return (len(self.map[0])-2)*state[0]+state[1]
 
     def reset(self):
         for _ in range(10):
             self.state = self.observation_space.sample()
             s = self.state
-            if self.map[s[0]+1]==' ' and self.map[s[1]+1]==' ':
+            #print(s,s[0]+1,s[1]+1,self.map[s[0]+1][s[1]+1])
+            if self.map[s[0]+1][s[1]+1]==' ':
                 return np.array(s)
 
     def step(self, action):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
         s = self.state
-        new_x = s[0]+1 + DX[action]
-        new_y = s[1]+1 + DY[action]
-        new_pos_char = self.map[new_x][new_y]
+        new_x = s[0] + DX[action]
+        new_y = s[1] + DY[action]
+        new_pos_char = self.map[new_x+1][new_y+1]
         is_end = False
         if new_pos_char == '.':
             reward = 0  # do not change position
