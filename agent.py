@@ -1,10 +1,7 @@
 from __future__ import print_function
 import numpy as np
 import time
-from maze import make_maze
-
-
-
+import sys
 
 class Agent(object):
     def __init__(self, env):
@@ -37,7 +34,7 @@ class Agent(object):
         self.Q = np.loadtxt(name)
         return
 
-def train(agent, env, num_episodes, max_number_of_steps):
+def qlearning(agent, env, num_episodes, max_number_of_steps):
     for episode in range(num_episodes):
         observation = env.reset()
         #print(observation)
@@ -54,13 +51,23 @@ def train(agent, env, num_episodes, max_number_of_steps):
                 break
         if ok==0:
             print('%d Episode failed' %(episode))
-       
-env = make_maze("space")
-agent = Agent(env)
+def sarsa(agent, env, num_episodes, max_number_of_steps):
+    for episode in range(num_episodes):
+        observation = env.reset()
+        #print(observation)
+        ok = 0
+        action = agent.policy(observation)
+        for i in range(max_number_of_steps):
+            #env.render()
+            observation2, reward,done, info = env.step(action)
+            action = agent.policy(observation)
+            agent.update(observation, action, observation2, reward, done)
+            observation = observation2
+            if done:
+                print('%d Episode finished after %d steps' % (episode, i + 1))
+                ok = 1
+                break
+        if ok==0:
+            print('%d Episode failed' %(episode))
 
-np.random.seed(0)
-num_episodes = 50
-max_number_of_steps = 30
 
-train(agent, env, num_episodes, max_number_of_steps)
-agent.save("q-learning")
