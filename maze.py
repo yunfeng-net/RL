@@ -96,7 +96,12 @@ class CartPoleEnv(gym.Wrapper):
                  np.digitize(pole_angle, bins=bins(-0.5, 0.5, 4)),
                  np.digitize(pole_v, bins=bins(-2.0, 2.0, 4))]
         return sum([x * (4 ** i) for i, x in enumerate(digitized)])
-
+    def step(self, action):
+        observation2, reward,done, info = super(CartPoleEnv,self).step(action)
+        if done:
+            reward = -200 # done means failure
+        return observation2, reward,done, info
+    
 def make_maze(name):
     if name=="space0":
         return MazeEnv(MAP)

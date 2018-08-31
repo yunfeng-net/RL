@@ -6,7 +6,8 @@ import sys
 class Agent(object):
     def __init__(self, env):
         self.env = env
-        self.Q = np.zeros((env.state_num, 4))
+        #self.Q = np.zeros((env.state_num, 4))
+        self.Q = np.random.uniform(low=-1, high=1, size=(env.state_num, env.action_space.n))
         self.EPSILON = 0.1
         self.ALPHA = 0.1
         self.GAMMA = 0.9
@@ -14,8 +15,8 @@ class Agent(object):
     def policy(self, observation):
         state = self.env.state_id(observation)
         if (np.random.uniform() > 1 - self.EPSILON) or ((self.Q[state, :] == 0).all()):
-            action = np.random.randint(0, 4)  # 0~3
-            #print("random")
+            action = np.random.randint(0, self.env.action_space.n)
+            #print("random %d" % action)
         else:
             action = self.Q[state, :].argmax()
         return action
@@ -25,7 +26,7 @@ class Agent(object):
         new_state = self.env.state_id(observation2)
         f = self.Q[state, action]
         if action2>=0:
-            next_f = self.Q[new_state, action]
+            next_f = self.Q[new_state, action2]
         else:
             next_f = self.Q[new_state, :].max()
         self.Q[state, action] = (1 - self.ALPHA) * self.Q[state, action] + \
@@ -65,7 +66,7 @@ def sarsa(agent, env, num_episodes, max_number_of_steps):
         for i in range(max_number_of_steps):
             #env.render()
             observation2, reward,done, info = env.step(action)
-            action2 = agent.policy(observation)
+            action2 = agent.policy(observation2)
             agent.update(observation, action, observation2, action2, reward, done)
             observation = observation2
             action = action2
