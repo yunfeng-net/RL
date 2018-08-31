@@ -74,7 +74,7 @@ class MazeEnv(gym.Env):
         elif new_pos_char == 'x':
             self.state = [new_x, new_y]
             self.map[new_x][new_y] = ' '  # update map
-            reward = -5
+            reward = -50
         return np.array(self.state), reward, is_end, {}
 
     def render(self):
@@ -83,8 +83,24 @@ class MazeEnv(gym.Env):
         print('\n'.join([''.join([c for c in line]) for line in printed_map]))
         time.sleep(0.1)
 
+def bins(clip_min, clip_max, num):
+    return np.linspace(clip_min, clip_max, num + 1)[1:-1]
+class CartPoleEnv(gym.Wrapper):
+    def __init__(self, env):
+        super(CartPoleEnv,self).__init__(env)
+        self.state_num = 4 ** 4
+    def state_id(self, state):
+        cart_pos, cart_v, pole_angle, pole_v = state
+        digitized = [np.digitize(cart_pos, bins=bins(-2.4, 2.4, 4)),
+                 np.digitize(cart_v, bins=bins(-3.0, 3.0, 4)),
+                 np.digitize(pole_angle, bins=bins(-0.5, 0.5, 4)),
+                 np.digitize(pole_v, bins=bins(-2.0, 2.0, 4))]
+        return sum([x * (4 ** i) for i, x in enumerate(digitized)])
+
 def make_maze(name):
-    if name=="space":
+    if name=="space0":
         return MazeEnv(MAP)
-    else:
+    elif name=="space1":
         return MazeEnv(MAP2)
+    elif name=="space2":
+        return CartPoleEnv(gym.make('CartPole-v0'))

@@ -15,17 +15,22 @@ class Agent(object):
         state = self.env.state_id(observation)
         if (np.random.uniform() > 1 - self.EPSILON) or ((self.Q[state, :] == 0).all()):
             action = np.random.randint(0, 4)  # 0~3
+            #print("random")
         else:
             action = self.Q[state, :].argmax()
         return action
 
-    def update(self, observation, action, observation2, reward, done):
+    def update(self, observation, action, observation2, action2, reward, done):
         state = self.env.state_id(observation)
         new_state = self.env.state_id(observation2)
         f = self.Q[state, action]
+        if action2>=0:
+            next_f = self.Q[new_state, action]
+        else:
+            next_f = self.Q[new_state, :].max()
         self.Q[state, action] = (1 - self.ALPHA) * self.Q[state, action] + \
-            self.ALPHA * (reward + self.GAMMA * self.Q[new_state, :].max())
-        #print("change q[",state,"=>",new_state, "] from ", f, "=>", self.Q[state, action])
+            self.ALPHA * (reward + self.GAMMA * next_f)
+        #print("change q[",state,"=>",new_state, "] from ", f, "=>", self.Q[state, :])
 
     def save(self, name):
         np.savetxt(name, self.Q)
@@ -43,7 +48,7 @@ def qlearning(agent, env, num_episodes, max_number_of_steps):
             #env.render()
             action = agent.policy(observation)
             observation2, reward,done, info = env.step(action)
-            agent.update(observation, action, observation2, reward, done)
+            agent.update(observation, action, observation2, -1, reward, done)
             observation = observation2
             if done:
                 print('%d Episode finished after %d steps' % (episode, i + 1))
@@ -60,9 +65,10 @@ def sarsa(agent, env, num_episodes, max_number_of_steps):
         for i in range(max_number_of_steps):
             #env.render()
             observation2, reward,done, info = env.step(action)
-            action = agent.policy(observation)
-            agent.update(observation, action, observation2, reward, done)
+            action2 = agent.policy(observation)
+            agent.update(observation, action, observation2, action2, reward, done)
             observation = observation2
+            action = action2
             if done:
                 print('%d Episode finished after %d steps' % (episode, i + 1))
                 ok = 1
