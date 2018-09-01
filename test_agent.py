@@ -15,10 +15,10 @@ parser.add_argument('--agent', type=int,
                       default=0,
                       help='index of agent: 0, 1')
 FLAGS, unparsed = parser.parse_known_args()
-FLAGS.maze = 2
-FLAGS.agent= 1
-FLAGS.method = 0
-print(FLAGS)
+#FLAGS.maze = 2
+#FLAGS.agent= 1
+#FLAGS.method = 0
+#print(FLAGS)
 
 env = make_maze("space%d" % FLAGS.maze)
 if FLAGS.agent==0:
