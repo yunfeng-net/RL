@@ -1,5 +1,6 @@
 from agent import Agent,DAgent,sarsa,qlearning
 from maze import make_maze
+from pg import GAgent
 import numpy as np
 import argparse
 import sys
@@ -7,13 +8,13 @@ import sys
 parser = argparse.ArgumentParser()
 parser.add_argument('--maze', type=int,
                       default=0,
-                      help='index of maps: 0, 1')
+                      help='index of maps: 0(MAP), 1(MAP2), 2(cartpole)')
 parser.add_argument('--method', type=int,
                       default=0,
-                      help='index of method: 0, 1')
+                      help='index of method: 0(QLEARN), 1(SARSA), 2(PG)')
 parser.add_argument('--agent', type=int,
                       default=0,
-                      help='index of agent: 0, 1')
+                      help='index of agent: 0(QTable), 1(QAgent), 2(GAgent)')
 FLAGS, unparsed = parser.parse_known_args()
 #FLAGS.maze = 2
 #FLAGS.agent= 1
@@ -23,8 +24,11 @@ FLAGS, unparsed = parser.parse_known_args()
 env = make_maze("space%d" % FLAGS.maze)
 if FLAGS.agent==0:
     agent = Agent(env)
-else:
+elif FLAGS.agent==1:
     agent = DAgent(env)
+else:
+    agent = GAgent(env)
+    FLAGS.method = 0
 
 np.random.seed(0)
 num_episodes = 50
