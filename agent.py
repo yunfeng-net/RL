@@ -2,6 +2,12 @@ from __future__ import print_function
 import numpy as np
 import time
 import sys
+import random
+from collections import deque
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.optimizers import Adam
+from keras import backend as K
 
 class Agent(object):
     def __init__(self, env):
@@ -40,6 +46,76 @@ class Agent(object):
         self.Q = np.loadtxt(name)
         return
 
+class DAgent(object):
+    def __init__(self, env):
+        self.env = env
+        self.state_size = env.observation_space.shape[0]
+        self.action_size = env.action_space.n
+        self.memory = deque(maxlen=2000)
+        self.gamma = 0.95    # discount rate
+        self.epsilon = 1.0  # exploration rate
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.99
+        self.learning_rate = 0.001
+        self.batch_size = 32
+        self.model = self.build_model()
+        self.target_model = self.build_model()
+
+    def _huber_loss(self, target, prediction):
+        # sqrt(1+error^2)-1
+        error = prediction - target
+        return K.mean(K.sqrt(1+K.square(error))-1, axis=-1)
+
+    def build_model(self):
+        # Neural Net for Deep-Q learning Model
+        model = Sequential()
+        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(24, activation='relu'))
+        model.add(Dense(self.action_size, activation='linear'))
+        model.compile(loss=self._huber_loss,
+                      optimizer=Adam(lr=self.learning_rate))
+        return model
+    def reshape(self, observation):
+        return np.reshape(observation, [1, self.state_size])
+    def policy(self, observation):
+        state = self.reshape(observation)
+        if np.random.rand() <= self.epsilon:
+            return random.randrange(self.action_size)
+        act_values = self.model.predict(state)
+        return np.argmax(act_values[0])  # returns action
+
+    def update(self, observation, action, observation2, action2, reward, done):
+        reward = reward if not done else -10
+        self.memory.append((observation, action, observation2, action2, reward, done))
+        if done:
+            self.target_model.set_weights(self.model.get_weights())
+            return
+        if len(self.memory) <= self.batch_size:
+            return
+        minibatch = random.sample(self.memory, self.batch_size)
+        for observation, action, observation2, action2, reward, done in minibatch:
+            state = self.reshape(observation)
+            target = self.model.predict(state)
+            if done:
+                target[0][action] = reward
+            else:
+                t = self.target_model.predict(self.reshape(observation2))[0]
+                #print(next_state,target)
+                #print(reward + self.gamma * np.amax(t))
+                target[0][action] = reward + self.gamma * np.amax(t)
+                # target[0][action] = reward + self.gamma * t[np.argmax(a)]
+            self.model.fit(state, target, epochs=1, verbose=0)
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+            #print("eps:",self.epsilon)
+        #print("change q[",state,"=>",new_state, "] from ", f, "=>", self.Q[state, :])
+
+    def load(self, name):
+        self.model.load_weights(name)
+
+    def save(self, name):
+        self.model.save_weights(name)
+
 def qlearning(agent, env, num_episodes, max_number_of_steps):
     for episode in range(num_episodes):
         observation = env.reset()
@@ -57,6 +133,7 @@ def qlearning(agent, env, num_episodes, max_number_of_steps):
                 break
         if ok==0:
             print('%d Episode failed' %(episode))
+
 def sarsa(agent, env, num_episodes, max_number_of_steps):
     for episode in range(num_episodes):
         observation = env.reset()

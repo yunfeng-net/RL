@@ -1,4 +1,4 @@
-from agent import Agent,sarsa,qlearning
+from agent import Agent,DAgent,sarsa,qlearning
 from maze import make_maze
 import numpy as np
 import argparse
@@ -11,18 +11,25 @@ parser.add_argument('--maze', type=int,
 parser.add_argument('--method', type=int,
                       default=0,
                       help='index of method: 0, 1')
+parser.add_argument('--agent', type=int,
+                      default=0,
+                      help='index of agent: 0, 1')
 FLAGS, unparsed = parser.parse_known_args()
-#FLAGS.maze = 2
-#FLAGS.method = 1
-#print(FLAGS)
+FLAGS.maze = 2
+FLAGS.agent= 1
+FLAGS.method = 0
+print(FLAGS)
 
 env = make_maze("space%d" % FLAGS.maze)
-agent = Agent(env)
+if FLAGS.agent==0:
+    agent = Agent(env)
+else:
+    agent = DAgent(env)
 
 np.random.seed(0)
 num_episodes = 50
 max_number_of_steps = 30
-if FLAGS.maze==2:
+if FLAGS.maze>=2:
     num_episodes *= 10
     max_number_of_steps *= 10
 
