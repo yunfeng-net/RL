@@ -7,6 +7,7 @@
 * agent.py: training for Q-learning and SARSA, choose by method=0,1
   + DAgent convert Q-table into Q-nn. it need model/target_model, replay and batch_size=32 to converge. choose by agent=1
   + the qlearn and sarsa code can be reused
+* pg.py: GAgent by policy gradient. choose by agent=2
 * test_agent.py: test utility controlled by arguments, \-\-help for info
 
 ## policy gradient
