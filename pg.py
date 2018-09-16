@@ -66,7 +66,7 @@ class GAgent(object):
             a.append(self.pgs[i]*discounted_rs_norm[i])
         self.model.fit(np.vstack(self.obs), np.array(a), verbose=0)
 
-        self.obs, self.ep_as, self.rs, self.probs = [], [], [], []
+        self.obs, self.pgs, self.rs, self.probs = [], [], [], []
         return discounted_rs_norm
     def update(self, observation, action, observation2, action2, reward, done):
         self.store_transition(observation, action, reward)
