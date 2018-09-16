@@ -14,7 +14,7 @@ parser.add_argument('--method', type=int,
                       help='index of method: 0(QLEARN), 1(SARSA), 2(PG)')
 parser.add_argument('--agent', type=int,
                       default=0,
-                      help='index of agent: 0(QTable), 1(QAgent), 2(GAgent)')
+                      help='index of agent: 0(QTable), 1(QAgent), 2(GAgent), 3(AC)')
 FLAGS, unparsed = parser.parse_known_args()
 #FLAGS.maze = 2
 #FLAGS.agent= 1
@@ -26,8 +26,10 @@ if FLAGS.agent==0:
     agent = Agent(env)
 elif FLAGS.agent==1:
     agent = DAgent(env)
-else:
+elif FLAGS.agent==2:
     agent = GAgent(env)
+else:
+    agent = A2CAgent(env)
     FLAGS.method = 0
 
 np.random.seed(0)
