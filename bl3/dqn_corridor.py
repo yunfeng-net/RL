@@ -5,8 +5,8 @@ from one_dim import SimpleCorridor
 
 #env = gym.make("CartPole-v1", render_mode="human")
 env = SimpleCorridor()
-model = DQNAgent(env, lr=0.01)
-model.learn()
+model = DQNAgent(env, lr=0.01, steps=20, buffer_type=2)
+model.learn(reward_th=0.85)
 
 obs, info = env.reset()
 while True:

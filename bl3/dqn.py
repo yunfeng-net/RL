@@ -46,8 +46,11 @@ def weighted_average(model, weight, reference):
 # DQN算法实现
 class DQNAgent:
     def __init__(self, vec_env, lr=1e-3, gamma=0.99, 
-                 batch_size=64, buffer_capacity=10000, target_update=100, buffer_type=1):
+                 batch_size=64, buffer_capacity=10000, target_update=100, buffer_type=1,
+                 ddqn=1, steps=1):
         self.env = vec_env
+        self.ddqn = ddqn
+        self.steps = steps
         self.state_dim = vec_env.observation_space.shape[0]
         self.action_dim = vec_env.action_space.n
         self.gamma = gamma
@@ -68,7 +71,7 @@ class DQNAgent:
             self.memory = PrioritizedReplayBuffer(buffer_capacity)
 
         
-    def predict(self, state, epsilon : float =1e-3):
+    def predict(self, state, epsilon : float =0):
         if random.random() < epsilon:
             return random.randint(0, self.action_dim - 1), state
         else:
@@ -79,7 +82,7 @@ class DQNAgent:
     
     def update(self):
         if len(self.memory) < self.batch_size:
-            return
+            return 1.0
         
         # 从回放缓冲区采样
         states, actions, rewards, next_states, dones, idxs, weights = self.memory.sample(self.batch_size)
@@ -95,11 +98,13 @@ class DQNAgent:
         
         # 计算目标Q值
         with torch.no_grad():
-            #q_values = self.target_net(next_states)
-            #next_q, _ = q_values.max(dim=1, keepdim=True) # target network
-            act = self.policy_net(next_states).argmax(dim=1,keepdim=True)
-            q_values = self.target_net(next_states)
-            next_q = q_values.gather(1,act) # double Q
+            if self.ddqn==0:
+                q_values = self.target_net(next_states)
+                next_q, _ = q_values.max(dim=1, keepdim=True) # target network
+            else:
+                act = self.policy_net(next_states).argmax(dim=1,keepdim=True)
+                q_values = self.target_net(next_states)
+                next_q = q_values.gather(1,act) # double Q
             target_q = rewards + self.gamma * next_q * (1 - dones)
         
         # 计算 TD-error 并更新优先级
@@ -120,7 +125,27 @@ class DQNAgent:
         if self.update_count % self.target_update == 0:
             weighted_average(self.target_net, 0.5, self.policy_net)
             #self.target_net.load_state_dict(self.policy_net.state_dict())
-    
+        return loss
+
+    def push_buffer(self, temp_buffer):
+            total_reward = 0
+            done = temp_buffer[-1][4]
+            final_next_state = temp_buffer[-1][3]
+            for i in range(len(temp_buffer)):
+                total_reward += temp_buffer[i][2] * (self.gamma ** i)
+            # 存储n步经验：初始state/action + n步累计奖励 + 最终next_state/done
+            self.memory.push(
+                temp_buffer[0][0],  # 初始state
+                temp_buffer[0][1],  # 初始action
+                total_reward,
+                final_next_state,
+                done
+            )
+            # 如果未结束，滑动窗口（移除第一步）
+            if not done:
+                temp_buffer.pop(0)
+
+
     def learn(self, reward_th=5):
         epsilon = 1.0
         epsilon_min = 0.01
@@ -133,22 +158,19 @@ class DQNAgent:
         for episode in range(episodes):
             state, _ = self.env.reset()
             episode_reward = 0
-            
+            loss = 0
+            temp_buffer = []
             for step in range(max_steps):
-                # 选择动作
                 action, _ = self.predict(state, epsilon)
-                
-                # 执行动作
                 next_state, reward, done, _, info = self.env.step(action)
-                
-                # 存储经验
-                self.memory.push(state, action, reward, next_state, done)
+                temp_buffer.append((state, action, reward, next_state, done))
+                if len(temp_buffer) >= self.steps or done:
+                    self.push_buffer(temp_buffer)
                 
                 state = next_state
                 episode_reward += reward
                 
-                # 更新网络
-                self.update()
+                loss += self.update()
                 
                 if done:
                     break
@@ -159,10 +181,10 @@ class DQNAgent:
             
             # 打印训练信息
             avg_reward = np.mean(rewards_history[-100:])
-            print(f'Episode {episode}, Reward: {episode_reward:.2f}, Avg Reward: {avg_reward:.2f}, Epsilon: {epsilon:.2f}')
+            print(f'Episode {episode}, Reward: {episode_reward:.2f}, Avg Reward: {avg_reward:.2f}, Epsilon: {epsilon:.2f} Loss: {loss:f}')
             
             # 如果问题解决则停止训练
-            if avg_reward >= reward_th and epsilon<0.1:
+            if avg_reward>reward_th and epsilon<0.5:
                 print(f"Solved at episode {episode}!")
                 #torch.save(agent.policy_net.state_dict(), 'dqn_cartpole.pth')
                 break
