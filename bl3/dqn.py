@@ -47,10 +47,12 @@ def weighted_average(model, weight, reference):
 class DQNAgent:
     def __init__(self, vec_env, lr=1e-3, gamma=0.99, 
                  batch_size=64, buffer_capacity=10000, target_update=100, buffer_type=1,
-                 ddqn=1, steps=1):
+                 ddqn=1, steps=1, dfs = 1, n_steps=200):
         self.env = vec_env
         self.ddqn = ddqn
         self.steps = steps
+        self.dfs = dfs
+        self.n_steps = n_steps
         self.state_dim = vec_env.observation_space.shape[0]
         self.action_dim = vec_env.action_space.n
         self.gamma = gamma
@@ -71,9 +73,14 @@ class DQNAgent:
             self.memory = PrioritizedReplayBuffer(buffer_capacity)
 
         
-    def predict(self, state, epsilon : float =0):
+    def predict(self, state, epsilon : float =0, action = None):
         if random.random() < epsilon:
-            return random.randint(0, self.action_dim - 1), state
+            if action is not None:
+                probs = np.full((self.env.action_space.n),0.5/self.env.action_space.n, dtype=np.float64)
+                probs[action] += 0.5
+                return self.env.action_space.sample(probability=probs), state
+            else:
+                return self.env.action_space.sample(), state
         else:
             with torch.no_grad():
                 state = torch.FloatTensor(state).unsqueeze(0)
@@ -151,7 +158,7 @@ class DQNAgent:
         epsilon_min = 0.01
         epsilon_decay = 0.995
         episodes = 5000
-        max_steps = 200
+        max_steps = self.n_steps
         
         rewards_history = []
         
@@ -160,8 +167,10 @@ class DQNAgent:
             episode_reward = 0
             loss = 0
             temp_buffer = []
+            action = None
             for step in range(max_steps):
-                action, _ = self.predict(state, epsilon)
+                act = action if self.dfs==1 else None
+                action, _ = self.predict(state, epsilon, action=act)
                 next_state, reward, done, _, info = self.env.step(action)
                 temp_buffer.append((state, action, reward, next_state, done))
                 if len(temp_buffer) >= self.steps or done:
@@ -184,7 +193,7 @@ class DQNAgent:
             print(f'Episode {episode}, Reward: {episode_reward:.2f}, Avg Reward: {avg_reward:.2f}, Epsilon: {epsilon:.2f} Loss: {loss:f}')
             
             # 如果问题解决则停止训练
-            if avg_reward>reward_th and epsilon<0.5:
+            if avg_reward>reward_th and epsilon<0.1:
                 print(f"Solved at episode {episode}!")
                 #torch.save(agent.policy_net.state_dict(), 'dqn_cartpole.pth')
                 break
