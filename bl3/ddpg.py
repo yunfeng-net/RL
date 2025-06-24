@@ -69,10 +69,13 @@ def hidden_init(layer):
 
 # Ornstein-Uhlenbeck 噪声过程
 class OUNoise:
-    def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.2):
+    def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.2, sigma_final=0.01, total_steps=100_000):
         self.mu = mu * np.ones(size)
         self.theta = theta
-        self.sigma = sigma
+        self.sigma_init = sigma
+        self.sigma_final = sigma_final
+        self.total_steps = total_steps
+        self.current_step = 0
         self.seed = random.seed(seed)
         self.reset()
 
@@ -80,6 +83,8 @@ class OUNoise:
         self.state = copy.copy(self.mu)
 
     def sample(self):
+        self.current_step += 1
+        self.sigma = max(self.sigma_final, self.sigma_init - (self.sigma_init - self.sigma_final) * (self.current_step / self.total_steps))
         x = self.state
         dx = self.theta * (self.mu - x) + self.sigma * np.array([random.random() for i in range(len(x))])
         self.state = x + dx

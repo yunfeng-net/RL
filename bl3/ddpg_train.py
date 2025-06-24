@@ -3,7 +3,7 @@ import gymnasium as gym
 from ddpg import DDPGAgent
 env = gym.make("Pendulum-v1") #, render_mode="human")
 #env = gym.make("BipedalWalker-v3") #, render_mode="human")
-model = DDPGAgent(env, buffer=1, lr=1e-3)
+model = DDPGAgent(env, buffer=1, lr=1e-4)
 #model.load("dppg.pth")
 model.learn(episodes=5000)
 model.save("dppg.pth")
