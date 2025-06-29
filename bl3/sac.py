@@ -2,21 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import numpy as np
-from collections import deque
-import random
 
-# Replay Buffer
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
-    def push(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
-    def sample(self, batch_size):
-        state, action, reward, next_state, done = zip(*random.sample(self.buffer, batch_size))
-        return np.stack(state), np.stack(action), np.stack(reward), np.stack(next_state), np.stack(done)
-    def __len__(self):
-        return len(self.buffer)
+from buffer import ReplayBuffer, PrioritizedReplayBuffer
 
 # Policy Network (Actor)
 class PolicyNetwork(nn.Module):
@@ -65,11 +52,13 @@ class SAC:
         self.gamma = gamma
         self.tau = tau
         self.alpha = alpha
-        self.actor = PolicyNetwork(state_dim, action_dim, hidden_dim)
-        self.critic1 = QNetwork(state_dim, action_dim, hidden_dim)
-        self.critic2 = QNetwork(state_dim, action_dim, hidden_dim)
-        self.critic1_target = QNetwork(state_dim, action_dim, hidden_dim)
-        self.critic2_target = QNetwork(state_dim, action_dim, hidden_dim)
+        self.device = torch.device("cuda:0")
+        self.iter = 0
+        self.actor = PolicyNetwork(state_dim, action_dim, hidden_dim).to(self.device)
+        self.critic1 = QNetwork(state_dim, action_dim, hidden_dim).to(self.device)
+        self.critic2 = QNetwork(state_dim, action_dim, hidden_dim).to(self.device)
+        self.critic1_target = QNetwork(state_dim, action_dim, hidden_dim).to(self.device)
+        self.critic2_target = QNetwork(state_dim, action_dim, hidden_dim).to(self.device)
         self.critic1_target.load_state_dict(self.critic1.state_dict())
         self.critic2_target.load_state_dict(self.critic2.state_dict())
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=lr)
@@ -79,22 +68,23 @@ class SAC:
         self.log_alpha = torch.zeros(1, requires_grad=True)
         self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr)
     def select_action(self, state, eval=False):
-        state = torch.FloatTensor(state).unsqueeze(0)
+        state = torch.FloatTensor(state).to(self.device).unsqueeze(0)
         action, _ = self.actor.sample(state)
         action = action.detach().cpu().numpy()[0]
         return action
     def predict(self, state):
-        state = torch.FloatTensor(state).unsqueeze(0)
+        state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         mean, _ = self.actor.forward(state)
         action = torch.tanh(mean)
         return action.detach().cpu().numpy()[0], None
-    def update(self, batch):
-        state, action, reward, next_state, done = batch
-        state = torch.FloatTensor(state)
-        next_state = torch.FloatTensor(next_state)
-        action = torch.FloatTensor(action)
-        reward = torch.FloatTensor(reward).unsqueeze(1)
-        done = torch.FloatTensor(done).unsqueeze(1)
+    def update(self, batch, replay_buffer):
+        state, action, reward, next_state, done, idxs, weights = batch
+        state = torch.FloatTensor(state).to(self.device)
+        next_state = torch.FloatTensor(next_state).to(self.device)
+        action = torch.FloatTensor(action).to(self.device)
+        reward = torch.FloatTensor(reward).to(self.device).unsqueeze(1)
+        done = torch.FloatTensor(done).to(self.device).unsqueeze(1)
+        weights = torch.FloatTensor(weights).to(self.device)
         with torch.no_grad():
             next_action, next_log_prob = self.actor.sample(next_state)
             q1_next_target = self.critic1_target(next_state, next_action)
@@ -102,9 +92,12 @@ class SAC:
             q_next_target = torch.min(q1_next_target, q2_next_target) - self.alpha * next_log_prob
             target_q = reward + (1 - done) * self.gamma * q_next_target
         current_q1 = self.critic1(state, action)
-        critic1_loss = F.mse_loss(current_q1, target_q)
+        critic1_loss = (weights * F.mse_loss(current_q1, target_q)).mean()
         current_q2 = self.critic2(state, action)
-        critic2_loss = F.mse_loss(current_q2, target_q)
+        critic2_loss = (weights * F.mse_loss(current_q2, target_q)).mean()
+
+        td_errors = (target_q - current_q1).abs().detach().cpu().numpy().flatten()
+        replay_buffer.update_priorities(idxs, td_errors)
         self.critic1_optimizer.zero_grad()
         critic1_loss.backward()
         self.critic1_optimizer.step()
@@ -119,17 +112,20 @@ class SAC:
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
-        alpha_loss = -(self.log_alpha * (log_prob + self.target_entropy).detach()).mean()
+        alpha_loss = -(self.log_alpha.to(self.device) * (log_prob + self.target_entropy).detach()).mean()
         self.alpha_optimizer.zero_grad()
         alpha_loss.backward()
         self.alpha_optimizer.step()
-        self.alpha = self.log_alpha.exp()
+        self.alpha = self.log_alpha.exp().to(self.device)
         for param, target_param in zip(self.critic1.parameters(), self.critic1_target.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         for param, target_param in zip(self.critic2.parameters(), self.critic2_target.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-    def learn(self, env, max_episodes, max_steps, batch_size):
-        replay_buffer = ReplayBuffer(1_000_000)
+    def learn(self, env, max_episodes, max_steps, batch_size, buffer=1):
+        if buffer == 0:
+            replay_buffer = ReplayBuffer(1_000_000)
+        else:
+            replay_buffer = PrioritizedReplayBuffer(1_000_000)
         episode_rewards = []
         for episode in range(max_episodes):
             state, _ = env.reset()
@@ -141,7 +137,7 @@ class SAC:
                 episode_reward += reward
                 if len(replay_buffer) > batch_size:
                     batch = replay_buffer.sample(batch_size)
-                    self.update(batch)
+                    self.update(batch, replay_buffer)
                 if done or step == max_steps - 1:
                     episode_rewards.append(episode_reward)
                     print(f"Episode {episode}, Reward: {episode_reward}")
